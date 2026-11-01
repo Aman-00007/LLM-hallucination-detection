@@ -132,6 +132,48 @@ def vectors_at_position(
     return vectors
 
 
+def vectors_at_generated_positions(
+    hidden_states: Sequence[Any],
+    prompt_tokens: int,
+    answer_tokens: int,
+    *,
+    layers: Sequence[int] | None = None,
+) -> dict[int, np.ndarray]:
+    """Return hidden-state vectors for every generated position.
+
+    The vectors come from one already-computed model forward pass.
+    The returned arrays have shape [generated_positions, hidden_dimension].
+    """
+    if not hidden_states:
+        raise ValueError("hidden_states is empty")
+    if prompt_tokens < 1:
+        raise ValueError("prompt_tokens must be positive")
+    if answer_tokens < 2:
+        raise ValueError("at least two generated positions are required")
+
+    start = prompt_tokens
+    end = prompt_tokens + answer_tokens
+    selected = list(range(len(hidden_states))) if layers is None else list(layers)
+
+    vectors: dict[int, np.ndarray] = {}
+    for layer in selected:
+        resolved = resolve_layer(len(hidden_states), layer)
+        state = hidden_states[resolved]
+
+        if end > state.shape[1]:
+            raise ValueError("generated span is outside the sequence")
+
+        vectors[resolved] = (
+            state[0, start:end]
+            .detach()
+            .float()
+            .cpu()
+            .numpy()
+            .copy()
+        )
+
+    return vectors
+
 def module_device(model: Any) -> Any:
     """Return the device of the first parameter."""
     try:
