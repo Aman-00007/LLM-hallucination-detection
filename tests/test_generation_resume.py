@@ -105,10 +105,20 @@ def test_historical_run_and_a_changed_manifest_are_refused(tmp_path: Path) -> No
 
 def test_torn_last_line_is_ignored_and_an_earlier_break_is_not(tmp_path: Path) -> None:
     path = tmp_path / "answers.jsonl"
-    path.write_text('{"question_id": "row1"}\n{"question_id":\n', encoding="utf-8")
+    path.write_text('{"question_id": "row1"}\n{"question_id":', encoding="utf-8")
     assert load_completed_ids(path) == {"row1"}
     path.write_text('{"question_id":\n{"question_id": "row2"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match="not JSON"):
+        load_completed_ids(path)
+
+
+def test_invalid_complete_last_line_is_not_ignored(tmp_path: Path) -> None:
+    path = tmp_path / "answers.jsonl"
+    path.write_text('{"question_id": "row1"}\nnot-json\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="not JSON"):
+        load_completed_ids(path)
+    path.write_text("null\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="JSON object"):
         load_completed_ids(path)
 
 
@@ -119,6 +129,17 @@ def test_resume_directory_allows_vectors_and_refuses_a_foreign_file(tmp_path: Pa
     assert_resume_directory(directory)
     (directory / "probe.joblib").write_text("x", encoding="utf-8")
     with pytest.raises(FileExistsError, match="probe.joblib"):
+        assert_resume_directory(directory)
+
+
+def test_resume_directory_refuses_symlinked_artifacts(tmp_path: Path) -> None:
+    directory = tmp_path / "run"
+    directory.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (directory / "vectors").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(FileExistsError, match="symlink"):
         assert_resume_directory(directory)
 
 

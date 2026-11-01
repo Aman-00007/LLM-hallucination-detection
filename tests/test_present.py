@@ -1,8 +1,10 @@
 """The risk report must not relabel a token probability as hallucination risk."""
 
+from rich.console import Console
+
 from glassbox.models.backend import GeneratedToken, GenerationResult
 from glassbox.models.distributions import TokenAlternative
-from glassbox.present import render_turn_text, risk_level
+from glassbox.present import EXTERNAL_PROBE_NOTE, render_banner, render_turn_text, risk_level
 from glassbox.probes.logistic import PROBE_NOT_TRAINED
 from glassbox.reporting import TurnRecord
 from glassbox.verification import ReferenceResult
@@ -78,3 +80,19 @@ def test_missing_probe_is_not_a_risk_level():
     token_section = rendered.split("OUTPUT TOKEN", 1)[1].split("MODEL UNCERTAINTY", 1)[0]
     assert "Probe" in token_section
     assert "PROBE NOT TRAINED" in token_section
+
+
+def test_banner_describes_signal_access_without_naming_another_model():
+    console = Console(record=True, width=120)
+    render_banner(
+        console,
+        model_name="Qwen/Qwen2.5-0.5B-Instruct",
+        backend_label="Hugging Face causal LM",
+        detector_status=PROBE_NOT_TRAINED,
+    )
+
+    text = console.export_text()
+    assert "Signals" in text
+    assert "logits and hidden states requested for analysis" in text
+    assert "Claude" not in text
+    assert "Claude" not in EXTERNAL_PROBE_NOTE

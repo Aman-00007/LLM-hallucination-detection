@@ -1,6 +1,7 @@
 """Tests for Glass Box report generation."""
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -296,6 +297,55 @@ def test_probe_compatibility_messaging(sample_generation, sample_turn, tmp_path)
     # The probe section should show the experimental status
     assert "[07] PROBE ANALYSIS" in text
     assert "HALLUCINATION PROBABILITY: NOT AVAILABLE" in text
+
+
+def test_zero_risk_probability_is_reported_only_for_calibrated_generation_probe(
+    sample_generation, sample_turn, tmp_path
+):
+    probe = SimpleNamespace(
+        metadata={
+            "label_protocol": "halueval_generation_evidence_v1",
+            "model_name": sample_generation.model_name,
+            "model_revision": sample_generation.model_revision,
+            "layer_index": sample_generation.feature_layer,
+            "position": "last_generated_token",
+            "feature_dim": sample_generation.feature.shape[0],
+            "threshold": 0.65,
+            "calibration_validated": True,
+        },
+        calibrated=True,
+    )
+    sample_turn.factual_risk_score = 0.0
+    report = build_report(
+        question="What is capital of India?",
+        generation=sample_generation,
+        turn=sample_turn,
+        probe=probe,
+        catalog_path=tmp_path / "missing.yaml",
+    )
+
+    assert "HALLUCINATION PROBABILITY: 0.0000" in report.to_text()
+    assert report.to_json()["calibrated_hallucination_probability"] == 0.0
+
+
+def test_pair_probe_risk_score_is_never_exported_as_probability(
+    sample_generation, sample_turn, tmp_path
+):
+    probe = SimpleNamespace(
+        metadata={"label_protocol": "halueval_qa_pair_v1", "threshold": 0.65},
+        calibrated=True,
+    )
+    sample_turn.factual_risk_score = 0.25
+    report = build_report(
+        question="What is capital of India?",
+        generation=sample_generation,
+        turn=sample_turn,
+        probe=probe,
+        catalog_path=tmp_path / "missing.yaml",
+    )
+
+    assert "HALLUCINATION PROBABILITY: NOT AVAILABLE" in report.to_text()
+    assert report.to_json()["calibrated_hallucination_probability"] is None
 
 
 def test_json_serialization_with_numpy(tmp_path):

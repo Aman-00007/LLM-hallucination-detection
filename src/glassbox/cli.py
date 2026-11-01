@@ -16,7 +16,7 @@ from rich.console import Console
 
 from glassbox.config import repo_root
 from glassbox.demo_config import default_probe_dir, load_demo_config
-from glassbox.glassbox_report import build_report
+from glassbox.glassbox_report import GlassBoxReport, build_report
 from glassbox.models.backend import HuggingFaceBackend
 from glassbox.models.resources import ModelMemoryError
 from glassbox.present import (
@@ -29,8 +29,9 @@ from glassbox.present import (
     render_samples,
 )
 from glassbox.probes.logistic import PROBE_NOT_TRAINED
-from glassbox.probes.store import load_probe
+from glassbox.probes.store import LoadedProbe, load_probe
 from glassbox.reporting import (
+    TurnRecord,
     format_diagnostics,
     format_export_message,
     format_probe_view,
@@ -95,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output-json",
         type=Path,
         default=None,
-        help="Export the analysis report as JSON to the specified path.",
+        help="Export the report as JSON; --demo writes an array of reports.",
     )
     commands = parser.add_subparsers(dest="command")
     train = commands.add_parser(
@@ -395,6 +396,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Glass Box could not start: {exc}", file=sys.stderr)
         return 1
     if args.analyze_text:
+        if args.output_json is not None:
+            print("--output-json is only supported for generated reports.", file=sys.stderr)
+            return 2
         if not args.question or args.answer is None:
             print("Pass --question and --answer with --analyze-text.", file=sys.stderr)
             return 2
@@ -455,11 +459,15 @@ def _run_demo(
 ) -> int:
     collected = []
     for question in DEMO_QUESTIONS:
-        code = _run_question(session, question, console, output_json)
+        code = _run_question(session, question, console)
         if code != 0:
             return code
         collected.append(session.turns[-1])
     render_epilogue(console, collected, detector)
+    if output_json is not None:
+        reports = [_report_for_turn(turn, session.probe).to_json() for turn in collected]
+        if not _write_json_export(output_json, reports, console):
+            return 1
     return 0
 
 
@@ -507,26 +515,35 @@ def _run_question(
         print(f"Generation failed: {exc}", file=sys.stderr)
         return 1
 
-    # Use new Glass Box report format
-    catalog_path = repo_root() / "configs" / "claim_references.yaml"
-    report = build_report(
-        question=question,
-        generation=turn.generation,
-        turn=turn,
-        probe=session.probe,
-        catalog_path=catalog_path,
-    )
-
+    report = _report_for_turn(turn, session.probe)
     console.print(report.to_text())
 
-    # Export JSON if requested
-    if output_json is not None:
-        output_json.parent.mkdir(parents=True, exist_ok=True)
-        with output_json.open("w", encoding="utf-8") as f:
-            json.dump(report.to_json(), f, indent=2, default=str)
-        console.print(f"\n[dim]JSON report saved to: {output_json}[/dim]")
+    if output_json is not None and not _write_json_export(output_json, report.to_json(), console):
+        return 1
 
     return 0
+
+
+def _report_for_turn(turn: TurnRecord, probe: LoadedProbe | None) -> GlassBoxReport:
+    return build_report(
+        question=turn.generation.question,
+        generation=turn.generation,
+        turn=turn,
+        probe=probe,
+        catalog_path=repo_root() / "configs" / "claim_references.yaml",
+    )
+
+
+def _write_json_export(path: Path, payload: object, console: Console) -> bool:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, default=str)
+    except OSError as exc:
+        print(f"JSON export failed: {exc}", file=sys.stderr)
+        return False
+    console.print(f"\n[dim]JSON report saved to: {path}[/dim]")
+    return True
 
 
 COMMAND_LEGEND = (
@@ -567,7 +584,7 @@ def _menu(session: DemoSession) -> bool:
     print(COMMAND_LEGEND, end="")
     while True:
         try:
-            command = input("glassbox [n/t/p/v/d/e/q]> ").strip().lower()
+            command = input("glassbox [n/r/t/p/v/d/e/q]> ").strip().lower()
         except EOFError:
             print()
             return False

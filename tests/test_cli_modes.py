@@ -1,5 +1,12 @@
 """Modes that must not load weights or invent a probe."""
 
+import json
+from io import StringIO
+from types import SimpleNamespace
+
+from rich.console import Console
+
+import glassbox.cli as cli
 from glassbox.cli import main
 from glassbox.demo_config import load_demo_config
 from glassbox.present import EXTERNAL_PROBE_NOTE
@@ -33,7 +40,7 @@ def test_analyze_text_does_not_probe_hidden_states(monkeypatch, capsys):
     assert code == 0
     output = capsys.readouterr().out
     assert "FAITHFUL" in output
-    assert "Hidden-state probing cannot be performed on this text alone." in output
+    assert "Hidden-state probing cannot be performed on supplied text alone." in output
     assert EXTERNAL_PROBE_NOTE.split(".")[0] in output
     assert "PROBE NOT TRAINED" in output
 
@@ -57,3 +64,45 @@ def test_offline_config_refuses_a_download():
     config = load_demo_config(offline=True, model_name="glassbox/not-a-real-model")
     assert config.spec.local_files_only is True
     assert config.spec.allow_download is False
+
+
+def test_demo_json_export_preserves_every_report(monkeypatch, tmp_path):
+    questions = ("Question one?", "Question two?", "Question three?")
+    monkeypatch.setattr(cli, "DEMO_QUESTIONS", questions)
+    monkeypatch.setattr(cli, "render_epilogue", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cli,
+        "build_report",
+        lambda **kwargs: SimpleNamespace(to_json=lambda: {"question": kwargs["question"]}),
+    )
+
+    session = SimpleNamespace(turns=[], probe=None)
+
+    def fake_run_question(session, question, _console):
+        session.turns.append(SimpleNamespace(generation=SimpleNamespace(question=question)))
+        return 0
+
+    monkeypatch.setattr(cli, "_run_question", fake_run_question)
+    output = tmp_path / "reports.json"
+
+    assert cli._run_demo(session, Console(file=StringIO()), "not trained", output) == 0
+    assert json.loads(output.read_text(encoding="utf-8")) == [
+        {"question": question} for question in questions
+    ]
+
+
+def test_analyze_text_rejects_unsupported_json_export(capsys, tmp_path):
+    code = main(
+        [
+            "--analyze-text",
+            "--question",
+            "What is the capital of Australia?",
+            "--answer",
+            "Canberra.",
+            "--output-json",
+            str(tmp_path / "report.json"),
+        ]
+    )
+
+    assert code == 2
+    assert "--output-json is only supported for generated reports" in capsys.readouterr().err

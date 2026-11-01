@@ -85,6 +85,7 @@ class GlassBoxReport:
             "generation_config": self._generation_config_json(),
             "hidden_state_metadata": self._hidden_state_metadata_json(),
             "probe": self._probe_json(),
+            "calibrated_hallucination_probability": self._validated_hallucination_probability(),
             "factuality": self._factuality_json(),
             "calibration": self._calibration_json(),
             "conclusion": self._conclusion_json(),
@@ -212,11 +213,33 @@ class GlassBoxReport:
             lines.append("")
             lines.append(account.note)
 
-        if not self.turn.factual_risk_score:
-            lines.append("")
-            lines.append("HALLUCINATION PROBABILITY: NOT AVAILABLE")
+        risk = self._validated_hallucination_probability()
+        lines.extend(
+            [
+                "",
+                (
+                    f"HALLUCINATION PROBABILITY: {risk:.4f}"
+                    if risk is not None
+                    else "HALLUCINATION PROBABILITY: NOT AVAILABLE"
+                ),
+            ]
+        )
 
         return "\n".join(lines)
+
+    def _validated_hallucination_probability(self) -> float | None:
+        account = account_probe(self.probe)
+        score = self.turn.factual_risk_score
+        if not account.compatible_generation_detector or score is None:
+            return None
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not np.isfinite(score)
+            or not 0.0 <= score <= 1.0
+        ):
+            return None
+        return float(score)
 
     def _layer_section(self) -> str:
         spans = self.generation.token_spans or {}

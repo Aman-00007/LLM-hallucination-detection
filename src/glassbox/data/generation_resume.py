@@ -79,15 +79,18 @@ def load_completed_ids(path: Path) -> set[str]:
     """
     if not path.is_file():
         return set()
-    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    contents = path.read_text(encoding="utf-8")
+    lines = [line for line in contents.splitlines() if line.strip()]
     found: set[str] = set()
     for line_number, line in enumerate(lines, start=1):
         try:
             payload = json.loads(line)
         except json.JSONDecodeError as exc:
-            if line_number == len(lines):
+            if line_number == len(lines) and not contents.endswith(("\n", "\r")):
                 continue
             raise ValueError(f"{path} line {line_number} is not JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"{path} line {line_number} must be a JSON object")
         question_id = payload.get("question_id")
         if not isinstance(question_id, str) or not question_id:
             raise ValueError(f"{path} line {line_number} has no question_id")
@@ -109,13 +112,22 @@ def append_jsonl(path: Path, payload: Mapping[str, object]) -> None:
 
 def assert_resume_directory(directory: Path) -> None:
     """Allow a resume directory that contains only this command's files."""
+    if directory.is_symlink():
+        raise FileExistsError(f"{directory} is a symlink")
     if not directory.exists():
         return
-    extra = sorted(path.name for path in directory.iterdir() if path.name not in ALLOWED_FILES)
+    contents = tuple(directory.iterdir())
+    symlinks = sorted(path.name for path in contents if path.is_symlink())
+    if symlinks:
+        raise FileExistsError(f"{directory / symlinks[0]} is a symlink")
+    extra = sorted(path.name for path in contents if path.name not in ALLOWED_FILES)
     if extra:
         raise FileExistsError(
             f"{directory} contains {extra[0]}, which this resume command does not own"
         )
+    vectors = directory / "vectors"
+    if vectors.exists() and not vectors.is_dir():
+        raise FileExistsError(f"{vectors} is not a directory")
 
 
 def manifest_matches(path: Path, expected: Mapping[str, object]) -> None:
@@ -123,6 +135,8 @@ def manifest_matches(path: Path, expected: Mapping[str, object]) -> None:
     if not path.is_file():
         return
     saved = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(saved, dict):
+        raise ValueError(f"Resume manifest {path} must be a JSON object")
     for key in ("dataset_sha256", "seed", "max_questions", "model_revision"):
         if saved.get(key) != expected.get(key):
             raise ValueError(
@@ -159,9 +173,17 @@ def generate_missing_command(args: object) -> int:
             raise ValueError("generate-v2-answers requires --offline and does not download weights")
         run_id = str(args.run_id)
         refuse_run_id(run_id)
+        if Path(run_id).name != run_id or run_id in {"", ".", ".."}:
+            raise ValueError(f"Run id must be a single path component: {run_id!r}")
         artifacts = Path(args.artifacts_root) if args.artifacts_root else repo_root() / "artifacts"
-        directory = (artifacts / "experiments" / run_id).resolve()
         root = artifacts.resolve()
+        experiments = root / "experiments"
+        if experiments.is_symlink():
+            raise ValueError(f"Refusing symlinked experiments directory: {experiments}")
+        candidate_directory = experiments / run_id
+        if candidate_directory.is_symlink():
+            raise ValueError(f"Refusing symlinked run directory: {candidate_directory}")
+        directory = candidate_directory.resolve()
         if not directory.is_relative_to(root):
             raise ValueError(f"Refusing to write outside {root}")
         historical = (root / "experiments" / HISTORICAL_GENERATION_RUN).resolve()
@@ -266,6 +288,9 @@ def generate_missing_command(args: object) -> int:
         for index, question_id in enumerate(pending, start=1):
             if "/" in question_id or question_id.startswith("."):
                 raise ValueError(f"Refusing question id {question_id!r}")
+            vector_path = vector_dir / f"{question_id}.npy"
+            if vector_path.is_symlink():
+                raise FileExistsError(f"Refusing symlinked vector path {vector_path}")
             pair = prepared.pairs[question_id]
             result = backend.generate(pair.question, settings)
             feature = (
@@ -299,7 +324,6 @@ def generate_missing_command(args: object) -> int:
                 hallucinated_answer=pair.hallucinated_answer,
                 answer=result.answer,
             )
-            vector_path = vector_dir / f"{question_id}.npy"
             if vector_path.exists():
                 # The JSONL row is the accepted answer. A vector without that
                 # row was left by an interrupted write and is not an answer.
