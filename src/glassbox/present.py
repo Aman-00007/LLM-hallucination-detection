@@ -21,10 +21,9 @@ from glassbox.probes.logistic import PROBE_NOT_TRAINED
 from glassbox.reporting import TurnRecord
 
 EXTERNAL_PROBE_NOTE = (
-    "Hidden-state probing cannot be performed on this text alone. "
-    "Claude Code's CLI returns generated text in text, json, or stream-json. "
-    "It does not expose logits, token probabilities, or hidden states. "
-    "No Claude-internal signal was read, and none was invented. "
+    "Hidden-state probing cannot be performed on supplied text alone. "
+    "This path did not load a model or read logits, token probabilities, or hidden states. "
+    "No model-internal signal was read, and none was invented. "
     "The hallucination probe was not applied."
 )
 
@@ -110,7 +109,12 @@ def render_banner(
     grid.add_row("Backend", Text(backend_label))
     style = "bold yellow" if detector_status == PROBE_NOT_TRAINED else "bold cyan"
     grid.add_row("Detector", Text(detector_status, style=style))
-    grid.add_row("Claude", Text("text only, no logits or hidden states"))
+    signals = (
+        "Text only; no logits or hidden states"
+        if backend_label == "supplied text"
+        else "Model-backed; logits and hidden states requested for analysis"
+    )
+    grid.add_row("Signals", Text(signals))
     header = Text("GLASS BOX", style="bold")
     header.append("   ·   LLM HALLUCINATION DETECTION", style="cyan")
     body: list = [header, Text(""), grid]

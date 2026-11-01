@@ -50,6 +50,7 @@ After an answer:
 
 ```text
 n = ask another question
+r = show the full 10-section generation analysis
 t = token probability analysis
 p = probe analysis
 v = reference verification
@@ -63,6 +64,8 @@ A blank line quits.
 
 ```bash
 python -m glassbox --demo
+python -m glassbox --once --question "What is the capital of Australia?" --output-json artifacts/reports/capital.json
+python -m glassbox --demo --output-json artifacts/reports/demo.json
 python -m glassbox --once --question "What is the capital of Australia?"
 python -m glassbox --offline --once --question "What is the capital of Australia?"
 python -m glassbox --samples
@@ -70,7 +73,7 @@ python -m glassbox --analyze-text --question "What is the capital of Australia?"
 python scripts/demo.py --samples
 ```
 
-`--offline` reads the Hugging Face cache and does not download weights. `--samples` and `--analyze-text` do not load a model. `--analyze-text` cannot see logits or hidden states.
+`--output-json` exports one generated report as an object; `--demo` exports an array with one report per question. It is not supported with `--analyze-text`, which does not load a model and cannot see logits or hidden states. `--offline` reads the Hugging Face cache and does not download weights. `--samples` also does not load a model.
 
 ```bash
 python -m glassbox --offline

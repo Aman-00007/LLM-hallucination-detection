@@ -7,6 +7,7 @@ reported as ``PROBE NOT TRAINED`` rather than replaced with a heuristic.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -15,6 +16,7 @@ from rich.console import Console
 
 from glassbox.config import repo_root
 from glassbox.demo_config import default_probe_dir, load_demo_config
+from glassbox.glassbox_report import GlassBoxReport, build_report
 from glassbox.models.backend import HuggingFaceBackend
 from glassbox.models.resources import ModelMemoryError
 from glassbox.present import (
@@ -25,11 +27,11 @@ from glassbox.present import (
     render_epilogue,
     render_external,
     render_samples,
-    render_turn,
 )
 from glassbox.probes.logistic import PROBE_NOT_TRAINED
-from glassbox.probes.store import load_probe
+from glassbox.probes.store import LoadedProbe, load_probe
 from glassbox.reporting import (
+    TurnRecord,
     format_diagnostics,
     format_export_message,
     format_probe_view,
@@ -89,6 +91,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=("topk", "full"),
         default="topk",
         help="topk stores the shown alternatives. full also keeps the vocabulary for export.",
+    )
+    parser.add_argument(
+        "--output-json",
+        type=Path,
+        default=None,
+        help="Export the report as JSON; --demo writes an array of reports.",
     )
     commands = parser.add_subparsers(dest="command")
     train = commands.add_parser(
@@ -276,6 +284,20 @@ def main(argv: list[str] | None = None) -> int:
     v2.add_argument("--threshold", type=float, default=None)
     v2.add_argument("--pair-probe", type=Path, default=None)
     v2.add_argument("--run-id", default="halueval-generation-002")
+    missing = commands.add_parser(
+        "generate-v2-answers",
+        help=(
+            "Generate expansion questions that generation-001 does not already contain. "
+            "Requires --offline. Does not train a probe or rewrite generation-001."
+        ),
+    )
+    missing.add_argument("--run-id", default="halueval-generation-v2-answers")
+    missing.add_argument("--max-questions", type=int, default=2400)
+    missing.add_argument("--seed", type=int, default=0)
+    missing.add_argument("--limit", type=int, default=None)
+    missing.add_argument("--snapshot", type=Path, default=None)
+    missing.add_argument("--cached", type=Path, default=None)
+    missing.add_argument("--artifacts-root", type=Path, default=None)
     view = commands.add_parser(
         "view-session",
         help="Render a session JSON export as HTML. Does not load Qwen or claim calibrated risk.",
@@ -351,6 +373,10 @@ def main(argv: list[str] | None = None) -> int:
         from glassbox.data.generation_v2 import v2_command
 
         return v2_command(args)
+    if args.command == "generate-v2-answers":
+        from glassbox.data.generation_resume import generate_missing_command
+
+        return generate_missing_command(args)
     if args.command == "view-session":
         from glassbox.reports.session_view import view_command
 
@@ -370,6 +396,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Glass Box could not start: {exc}", file=sys.stderr)
         return 1
     if args.analyze_text:
+        if args.output_json is not None:
+            print("--output-json is only supported for generated reports.", file=sys.stderr)
+            return 2
         if not args.question or args.answer is None:
             print("Pass --question and --answer with --analyze-text.", file=sys.stderr)
             return 2
@@ -410,9 +439,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Pass --question with --once.", file=sys.stderr)
         return 2
     if args.demo:
-        return _run_demo(session, console, detector)
+        return _run_demo(session, console, detector, args.output_json)
     if args.question:
-        code = _run_question(session, args.question, console)
+        code = _run_question(session, args.question, console, args.output_json)
         if code != 0 or args.once:
             return code
         if not _menu(session):
@@ -425,7 +454,9 @@ def app() -> None:
     raise SystemExit(main())
 
 
-def _run_demo(session: DemoSession, console: Console, detector: str) -> int:
+def _run_demo(
+    session: DemoSession, console: Console, detector: str, output_json: Path | None = None
+) -> int:
     collected = []
     for question in DEMO_QUESTIONS:
         code = _run_question(session, question, console)
@@ -433,6 +464,10 @@ def _run_demo(session: DemoSession, console: Console, detector: str) -> int:
             return code
         collected.append(session.turns[-1])
     render_epilogue(console, collected, detector)
+    if output_json is not None:
+        reports = [_report_for_turn(turn, session.probe).to_json() for turn in collected]
+        if not _write_json_export(output_json, reports, console):
+            return 1
     return 0
 
 
@@ -465,7 +500,9 @@ def _analyze_text(
     return 0
 
 
-def _run_question(session: DemoSession, question: str, console: Console) -> int:
+def _run_question(
+    session: DemoSession, question: str, console: Console, output_json: Path | None = None
+) -> int:
     view = LiveTokenView(console, session.settings.max_new_tokens) if console.is_terminal else None
     try:
         _ensure_model(session, console)
@@ -477,12 +514,41 @@ def _run_question(session: DemoSession, question: str, console: Console) -> int:
     except (ModelMemoryError, OSError, ValueError, RuntimeError, ImportError) as exc:
         print(f"Generation failed: {exc}", file=sys.stderr)
         return 1
-    render_turn(console, turn)
+
+    report = _report_for_turn(turn, session.probe)
+    console.print(report.to_text())
+
+    if output_json is not None and not _write_json_export(output_json, report.to_json(), console):
+        return 1
+
     return 0
+
+
+def _report_for_turn(turn: TurnRecord, probe: LoadedProbe | None) -> GlassBoxReport:
+    return build_report(
+        question=turn.generation.question,
+        generation=turn.generation,
+        turn=turn,
+        probe=probe,
+        catalog_path=repo_root() / "configs" / "claim_references.yaml",
+    )
+
+
+def _write_json_export(path: Path, payload: object, console: Console) -> bool:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, default=str)
+    except OSError as exc:
+        print(f"JSON export failed: {exc}", file=sys.stderr)
+        return False
+    console.print(f"\n[dim]JSON report saved to: {path}[/dim]")
+    return True
 
 
 COMMAND_LEGEND = (
     "n = ask another question\n"
+    "r = show full report (10-section Glass Box analysis)\n"
     "t = token probability analysis — generated output-token probabilities and alternatives\n"
     "p = probe analysis — hidden-state probe score, separate from token probabilities\n"
     "v = reference verification — external curated check, separate from the probe\n"
@@ -518,7 +584,7 @@ def _menu(session: DemoSession) -> bool:
     print(COMMAND_LEGEND, end="")
     while True:
         try:
-            command = input("glassbox [n/t/p/v/d/e/q]> ").strip().lower()
+            command = input("glassbox [n/r/t/p/v/d/e/q]> ").strip().lower()
         except EOFError:
             print()
             return False
@@ -535,11 +601,21 @@ def _menu(session: DemoSession) -> bool:
 
 def render_command(session: DemoSession, command: str, *, root: Path) -> str | None:
     """Return the text for an inspection command, or None when it is unknown."""
-    if command not in {"t", "p", "v", "d", "e"}:
+    if command not in {"r", "t", "p", "v", "d", "e"}:
         return None
     if not session.turns:
         return "No turn yet.\n"
     turn = session.turns[-1]
+    if command == "r":
+        catalog_path = repo_root() / "configs" / "claim_references.yaml"
+        report = build_report(
+            question=turn.generation.question,
+            generation=turn.generation,
+            turn=turn,
+            probe=session.probe,
+            catalog_path=catalog_path,
+        )
+        return report.to_text()
     if command == "t":
         return format_token_view(turn)
     if command == "p":
