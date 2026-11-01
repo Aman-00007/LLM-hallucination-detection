@@ -174,6 +174,7 @@ def vectors_at_generated_positions(
 
     return vectors
 
+
 def module_device(model: Any) -> Any:
     """Return the device of the first parameter."""
     try:
