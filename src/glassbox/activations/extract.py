@@ -163,14 +163,7 @@ def vectors_at_generated_positions(
         if end > state.shape[1]:
             raise ValueError("generated span is outside the sequence")
 
-        vectors[resolved] = (
-            state[0, start:end]
-            .detach()
-            .float()
-            .cpu()
-            .numpy()
-            .copy()
-        )
+        vectors[resolved] = state[0, start:end].detach().float().cpu().numpy().copy()
 
     return vectors
 
