@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import sys
+
 QWEN_0_5B = "Qwen/Qwen2.5-0.5B-Instruct"
 QWEN_1_5B = "Qwen/Qwen2.5-1.5B-Instruct"
 QWEN_3B = "Qwen/Qwen2.5-3B-Instruct"
@@ -21,10 +24,10 @@ DTYPE_BYTES: dict[str, int] = {
 
 # Activations, allocator overhead, and the tokenizer sit on top of the weights.
 _WEIGHT_OVERHEAD = 1.35
-# Override with GLASSBOX_HEADROOM_GB (e.g. 0.2) on machines with little free RAM.
-def _headroom_bytes() -> int:
-    import os
 
+
+def _headroom_bytes() -> int:
+    """Spare RAM to keep free; override with GLASSBOX_HEADROOM_GB (default 1)."""
     try:
         return int(float(os.environ.get("GLASSBOX_HEADROOM_GB", "1")) * 1_000_000_000)
     except ValueError:
@@ -41,9 +44,6 @@ class ModelMemoryError(MemoryError):
 
 def available_ram_bytes() -> int:
     """Return currently available RAM in bytes (Linux, Windows, macOS)."""
-    import os
-    import sys
-
     if sys.platform.startswith("linux"):
         try:
             with open("/proc/meminfo", encoding="utf-8") as meminfo:
@@ -113,9 +113,7 @@ def peak_rss_kb() -> float:
         counters = _Counters()
         counters.cb = ctypes.sizeof(_Counters)
         process = ctypes.windll.kernel32.GetCurrentProcess()
-        ctypes.windll.psapi.GetProcessMemoryInfo(
-            process, ctypes.byref(counters), counters.cb
-        )
+        ctypes.windll.psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb)
         return counters.PeakWorkingSetSize / 1024
     except Exception:
         return 0.0

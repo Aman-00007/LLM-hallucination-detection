@@ -7,7 +7,6 @@ frozen on the HaluEval validation split.
 from __future__ import annotations
 
 import argparse
-from glassbox.models.resources import peak_rss_kb
 import sys
 from pathlib import Path
 
@@ -27,6 +26,7 @@ from glassbox.demo_config import default_probe_dir, load_demo_config
 from glassbox.evaluation.metrics import BOOTSTRAP_MIN_PER_CLASS, compute_binary_metrics
 from glassbox.evaluation.records import write_json
 from glassbox.models.backend import HuggingFaceBackend
+from glassbox.models.resources import peak_rss_kb
 from glassbox.probes.logistic import PROBE_NOT_TRAINED
 from glassbox.probes.scoring import confusion_counts, expected_calibration_error, overlap_score
 from glassbox.probes.store import check_compatibility, experimental_score, load_probe

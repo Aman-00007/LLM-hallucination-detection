@@ -68,7 +68,7 @@ def acquire_model_lock(path: Path | None = None):
     handle = destination.open("a+")
     try:
         _try_lock(handle)
-    except (BlockingIOError, PermissionError, OSError) as exc:
+    except OSError as exc:
         handle.close()
         raise RuntimeError(
             "Another Glass Box process already has Qwen loaded. "

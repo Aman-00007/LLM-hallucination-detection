@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import math
-from glassbox.models.resources import peak_rss_kb
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -53,6 +52,7 @@ from glassbox.evaluation.metrics import (
     compute_binary_metrics,
 )
 from glassbox.evaluation.records import write_json
+from glassbox.models.resources import peak_rss_kb
 from glassbox.probes.scoring import confusion_counts, expected_calibration_error, overlap_score
 from glassbox.probes.store import (
     ProbeCompatibilityError,

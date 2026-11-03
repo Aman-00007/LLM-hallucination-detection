@@ -8,7 +8,6 @@ to training when a class is missing.
 from __future__ import annotations
 
 import argparse
-from glassbox.models.resources import peak_rss_kb
 import shutil
 import subprocess
 import sys
@@ -34,6 +33,7 @@ from glassbox.demo_config import default_probe_dir, load_demo_config
 from glassbox.evaluation.metrics import bootstrap_interval, compute_binary_metrics
 from glassbox.evaluation.records import build_run_record, write_json
 from glassbox.models.backend import GenerationSettings, HuggingFaceBackend, completion_hidden_states
+from glassbox.models.resources import peak_rss_kb
 from glassbox.probes.logistic import PROBE_NOT_TRAINED, LogisticProbe
 from glassbox.probes.preprocess import apply_standard_scaler, fit_standard_scaler
 from glassbox.probes.scoring import (
