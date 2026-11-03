@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import atexit
-import fcntl
 import os
 import re
 import time
@@ -45,6 +44,19 @@ POSITIONS = ("last_prompt_token", "last_generated_token")
 _COMMIT_HASH = re.compile(r"[0-9a-f]{40}")
 
 
+def _try_lock(handle) -> None:
+    """Non-blocking exclusive lock that works on both POSIX and Windows."""
+    if os.name == "nt":
+        import msvcrt
+
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
 def acquire_model_lock(path: Path | None = None):
     """Hold an exclusive lock for as long as this process keeps the model.
 
@@ -55,8 +67,8 @@ def acquire_model_lock(path: Path | None = None):
     destination.parent.mkdir(parents=True, exist_ok=True)
     handle = destination.open("a+")
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError as exc:
+        _try_lock(handle)
+    except OSError as exc:
         handle.close()
         raise RuntimeError(
             "Another Glass Box process already has Qwen loaded. "
