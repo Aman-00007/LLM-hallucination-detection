@@ -216,7 +216,7 @@ def test_html_command_writes_and_opens_the_page(monkeypatch, tmp_path, capsys):
     assert "Who wrote The Odyssey?" in opened[0].read_text(encoding="utf-8")
 
 
-def test_html_page_is_not_opened_outside_a_terminal(monkeypatch):
+def test_html_page_is_not_opened_without_h(monkeypatch):
     _install_backend(monkeypatch)
     opened = []
     monkeypatch.setattr("glassbox.cli.open_in_browser", lambda path: opened.append(path) or True)

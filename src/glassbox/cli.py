@@ -47,7 +47,7 @@ from glassbox.verification import (
     reference_for_question,
 )
 
-# Set in main(): open each answer as an HTML page when running in a real terminal.
+# Set in main(): with --auto-html, open each answer as an HTML page in a real terminal.
 _html_enabled = False
 
 
@@ -104,9 +104,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Export the report as JSON; --demo writes an array of reports.",
     )
     parser.add_argument(
-        "--no-html",
+        "--auto-html",
         action="store_true",
-        help="Do not write or open the HTML report after each answer.",
+        help="Open the HTML report after every answer. Otherwise press h at the menu.",
     )
     commands = parser.add_subparsers(dest="command")
     train = commands.add_parser(
@@ -392,7 +392,7 @@ def main(argv: list[str] | None = None) -> int:
 
         return view_command(args)
     console = make_console()
-    _html_enabled = console.is_terminal and not args.no_html
+    _html_enabled = console.is_terminal and args.auto_html
     if args.samples:
         render_samples(console)
         return 0
