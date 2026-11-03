@@ -1,0 +1,98 @@
+# Frozen test fixtures for retrieval-backed claim verification.
+# These are hand-reviewed and must not be modified without updating the
+# corresponding test expectations.
+# Schema: retrieval_fixtures_v1
+
+schema: retrieval_fixtures_v1
+description: >
+  Deterministic evidence records for testing the retrieval path without
+  network access. Each claim maps to a list of evidence records.
+
+claims:
+  "Paris is the capital of France.":
+    - source_id: "wikipedia_paris"
+      source_url: "https://en.wikipedia.org/wiki/Paris"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2026-01-01"
+      content_hash: "abc123def456"
+      query: "Paris capital of France"
+      relevant_quote: "Paris is the capital and most populous city of France."
+      relation: "supports"
+
+  "Mumbai is the capital of India.":
+    - source_id: "wikipedia_mumbai"
+      source_url: "https://en.wikipedia.org/wiki/Mumbai"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2026-01-01"
+      content_hash: "def456abc789"
+      query: "Mumbai capital of India"
+      relevant_quote: "Mumbai is the financial capital of India, while New Delhi is the political capital."
+      relation: "contradicts"
+
+  "The Earth is flat.":
+    - source_id: "wikipedia_earth"
+      source_url: "https://en.wikipedia.org/wiki/Earth"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2026-01-01"
+      content_hash: "ghi789jkl012"
+      query: "Earth shape"
+      relevant_quote: "Earth is an oblate spheroid, nearly spherical in shape."
+      relation: "contradicts"
+
+  "Python was created by Guido van Rossum.":
+    - source_id: "wikipedia_python"
+      source_url: "https://en.wikipedia.org/wiki/Python_(programming_language)"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2026-01-01"
+      content_hash: "jkl012mno345"
+      query: "Python creator Guido van Rossum"
+      relevant_quote: "Python was created by Guido van Rossum and first released in 1991."
+      relation: "supports"
+
+  "Water boils at 50 degrees Celsius.":
+    - source_id: "wikipedia_water"
+      source_url: "https://en.wikipedia.org/wiki/Water"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2026-01-01"
+      content_hash: "mno345pqr678"
+      query: "water boiling point Celsius"
+      relevant_quote: "Water boils at 100 degrees Celsius at standard atmospheric pressure."
+      relation: "contradicts"
+
+  "The sun rises in the west.":
+    - source_id: "wikipedia_sun"
+      source_url: "https://en.wikipedia.org/wiki/Sun"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2026-01-01"
+      content_hash: "pqr678stu901"
+      query: "sun rises direction"
+      relevant_quote: "The Sun rises in the east and sets in the west due to Earth's rotation."
+      relation: "contradicts"
+
+  "Vitamin C prevents the common cold.":
+    - source_id: "nih_review"
+      source_url: "https://www.ncbi.nlm.nih.gov/review"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2023-06-01"
+      content_hash: "stu901vwx234"
+      query: "vitamin C common cold prevention"
+      relevant_quote: "Regular vitamin C supplementation does not prevent the common cold in the general population."
+      relation: "contradicts"
+    - source_id: "alternative_medicine"
+      source_url: null
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2022-01-01"
+      content_hash: "vwx234yza567"
+      query: "vitamin C prevents colds"
+      relevant_quote: "High-dose vitamin C can reduce the duration and severity of common cold symptoms."
+      relation: "supports"
+
+  "The Great Wall of China is visible from space with the naked eye.":
+    - source_id: "nasa_fact"
+      source_url: "https://www.nasa.gov/fact"
+      retrieved_at: "2026-01-15T00:00:00Z"
+      source_date: "2020-01-01"
+      content_hash: "yza567bcd890"
+      query: "Great Wall of China visible from space"
+      relevant_quote: "The Great Wall of China is not visible from space with the naked eye."
+      relation: "contradicts"
