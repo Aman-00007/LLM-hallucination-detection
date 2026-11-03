@@ -7,7 +7,7 @@ frozen on the HaluEval validation split.
 from __future__ import annotations
 
 import argparse
-import resource
+from glassbox.models.resources import peak_rss_kb
 import sys
 from pathlib import Path
 
@@ -75,7 +75,7 @@ def evaluate_command(args: argparse.Namespace) -> int:
         root = repo_root() / "artifacts"
         destination = root / "experiments" / args.run_id / "report.json"
         write_json(destination, report, root=root)
-        peak_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        peak_kb = peak_rss_kb()
         print(f"Wrote {destination}")
         print(f"Peak RSS: {peak_kb / 1024:.0f} MiB")
         _print(report)

@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import math
-import resource
+from glassbox.models.resources import peak_rss_kb
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -601,7 +601,7 @@ def _transfer_command(args: argparse.Namespace) -> int:
         generation_settings=settings,
         probe_metadata_sha256=metadata_sha,
     )
-    peak_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    peak_kb = peak_rss_kb()
     print(f"Wrote {run_dir}")
     print(f"Peak RSS: {peak_kb / 1024:.0f} MiB")
     print(format_summary(metrics))

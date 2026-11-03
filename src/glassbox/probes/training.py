@@ -8,7 +8,7 @@ to training when a class is missing.
 from __future__ import annotations
 
 import argparse
-import resource
+from glassbox.models.resources import peak_rss_kb
 import shutil
 import subprocess
 import sys
@@ -410,7 +410,7 @@ def train_command(args: argparse.Namespace) -> int:
             outcome.reason = outcome.reason.replace(str(staging), str(final_dir))
             outcome.directory = final_dir
         _write_experiment(args.run_id, outcome, dataset_record, config.spec.name)
-        peak_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        peak_kb = peak_rss_kb()
         print(f"Peak RSS: {peak_kb / 1024:.0f} MiB", flush=True)
     except (OSError, ValueError, RuntimeError, MemoryError, ImportError) as exc:
         print(f"{PROBE_NOT_TRAINED}: {exc}", file=sys.stderr)
