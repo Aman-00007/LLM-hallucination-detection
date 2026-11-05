@@ -430,7 +430,7 @@ def main(argv: list[str] | None = None) -> int:
     if probe is None:
         detector = PROBE_NOT_TRAINED
         detail = f"{config.selection_reason} No saved probe was loaded. No prediction was invented."
-    elif probe.calibrated:
+    elif probe.calibrated and _is_generation_detector(probe):
         detector = "calibrated probe loaded"
         detail = config.selection_reason
     else:
@@ -656,6 +656,13 @@ def render_command(session: DemoSession, command: str, *, root: Path) -> str | N
     path = session.export(root)
     extras = sorted(item for item in path.parent.glob("distributions-*") if item.is_file())
     return format_export_message(path, path.with_suffix(".md"), extras)
+
+
+def _is_generation_detector(probe: LoadedProbe) -> bool:
+    """True only for a generation-protocol probe (pairwise probes excluded)."""
+    from glassbox.analysis.protocol import account_probe
+
+    return account_probe(probe).compatible_generation_detector
 
 
 def _ensure_model(session: DemoSession, console: Console) -> None:
