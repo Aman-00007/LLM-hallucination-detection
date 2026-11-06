@@ -93,9 +93,7 @@ def test_retrieval_supports_python_creator() -> None:
 def test_retrieval_contradicts_false_fact() -> None:
     """A false claim is CONTRADICTED by fixture evidence."""
     client = _make_client()
-    result = verify_answer_with_retrieval(
-        "The Earth is flat.", _catalog(), retrieval_client=client
-    )
+    result = verify_answer_with_retrieval("The Earth is flat.", _catalog(), retrieval_client=client)
     assert result["overall"] == "CONTRADICTED"
     claims = result["claims"]
     assert claims[0]["status"] == "CONTRADICTED"

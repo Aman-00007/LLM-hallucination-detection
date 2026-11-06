@@ -97,9 +97,7 @@ def load_retrieval_config(path: Path) -> RetrievalConfig:
                 source_id=str(raw.get("id", "")),
                 source_type=str(raw.get("type", "")),
                 quality_tier=int(raw.get("quality_tier", 3)),
-                config={
-                    k: v for k, v in raw.items() if k not in ("id", "type", "quality_tier")
-                },
+                config={k: v for k, v in raw.items() if k not in ("id", "type", "quality_tier")},
             )
         )
     return RetrievalConfig(enabled=enabled, sources=tuple(sources))
@@ -113,9 +111,7 @@ def load_fixture_client(fixture_path: Path) -> FixtureRetrievalClient:
     fixtures: dict[str, list[dict[str, object]]] = {}
     for claim_text, records in payload["claims"].items():
         if not isinstance(records, list):
-            raise ValueError(
-                f"claim '{claim_text}' must map to a list of evidence records"
-            )
+            raise ValueError(f"claim '{claim_text}' must map to a list of evidence records")
         fixtures[str(claim_text)] = [dict(r) for r in records if isinstance(r, dict)]
     return FixtureRetrievalClient(fixtures)
 
@@ -216,8 +212,16 @@ def verify_answer_with_retrieval(
             "overall": "UNVALIDATED",
             "note": "The model produced no text.",
             "claim_count": 0,
-            "counts": {"FAITHFUL": 0, "HALLUCINATED": 0, "AMBIGUOUS": 0, "UNVALIDATED": 0,
-                        "SUPPORTED": 0, "CONTRADICTED": 0, "CONFLICTING": 0, "UNVERIFIED": 0},
+            "counts": {
+                "FAITHFUL": 0,
+                "HALLUCINATED": 0,
+                "AMBIGUOUS": 0,
+                "UNVALIDATED": 0,
+                "SUPPORTED": 0,
+                "CONTRADICTED": 0,
+                "CONFLICTING": 0,
+                "UNVERIFIED": 0,
+            },
             "evidence_source": "none",
             "claims": [],
         }
@@ -258,22 +262,24 @@ def verify_answer_with_retrieval(
 
 def _summarise_verdicts(verdicts: tuple[ClaimVerdict, ...]) -> dict[str, object]:
     counts: dict[str, int] = {
-        "FAITHFUL": 0, "HALLUCINATED": 0, "AMBIGUOUS": 0, "UNVALIDATED": 0,
-        "SUPPORTED": 0, "CONTRADICTED": 0, "CONFLICTING": 0, "UNVERIFIED": 0,
+        "FAITHFUL": 0,
+        "HALLUCINATED": 0,
+        "AMBIGUOUS": 0,
+        "UNVALIDATED": 0,
+        "SUPPORTED": 0,
+        "CONTRADICTED": 0,
+        "CONFLICTING": 0,
+        "UNVERIFIED": 0,
     }
     for v in verdicts:
         counts[v.status] = counts.get(v.status, 0) + 1
 
     statuses = {v.status for v in verdicts}
-    if "HALLUCINATED" in statuses and "FAITHFUL" in statuses:
-        overall = "AMBIGUOUS"
-    elif "AMBIGUOUS" in statuses:
+    if "HALLUCINATED" in statuses and "FAITHFUL" in statuses or "AMBIGUOUS" in statuses:
         overall = "AMBIGUOUS"
     elif "HALLUCINATED" in statuses:
         overall = "HALLUCINATED"
-    elif "CONTRADICTED" in statuses and "SUPPORTED" in statuses:
-        overall = "CONFLICTING"
-    elif "CONFLICTING" in statuses:
+    elif "CONTRADICTED" in statuses and "SUPPORTED" in statuses or "CONFLICTING" in statuses:
         overall = "CONFLICTING"
     elif "CONTRADICTED" in statuses:
         overall = "CONTRADICTED"
@@ -339,7 +345,9 @@ def _verdict_note(overall: str, source: str) -> str:
             return "A matched claim contradicts the curated catalog."
         if overall == "AMBIGUOUS":
             return "The answer contains both a supported and a contradicted claim per the curated catalog."
-        return "At least one claim has no catalog evidence. Missing evidence is not a hallucination."
+        return (
+            "At least one claim has no catalog evidence. Missing evidence is not a hallucination."
+        )
     if source == "independent_retrieval":
         if overall == "SUPPORTED":
             return "All claims are supported by independently retrieved evidence."
@@ -378,15 +386,22 @@ def make_evidence_record(
     *,
     source_url: str | None = None,
     source_date: str | None = None,
-    content: str = "",
+    content: str,
 ) -> EvidenceProvenance:
-    """Factory for EvidenceProvenance with auto-generated timestamp and hash."""
+    """Factory for EvidenceProvenance with auto-generated timestamp and hash.
+
+    ``content`` is the full retrievable source text that ``relevant_quote`` was
+    drawn from. It is hashed into ``content_hash`` so provenance can be audited
+    against the original source. It must be provided explicitly — the factory
+    never falls back to hashing ``relevant_quote`` because the field is named
+    ``content_hash``, not ``quote_hash``.
+    """
     return EvidenceProvenance(
         source_id=source_id,
         source_url=source_url,
         retrieved_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         source_date=source_date,
-        content_hash=_hash_content(content or relevant_quote),
+        content_hash=_hash_content(content),
         query=query,
         relevant_quote=relevant_quote,
         relation=relation,

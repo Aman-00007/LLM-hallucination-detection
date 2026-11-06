@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from glassbox.constants import DATASET_IDS
 
 _SOURCE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,200}")
+_SHA256_HEX = re.compile(r"^[a-f0-9]{64}$")
+_ISO_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
 
 
 class Label(enum.Enum):
@@ -85,8 +87,6 @@ def _optional_text(value: str | None, name: str) -> None:
         raise ValueError(f"{name} must be a string or None")
 
 
-
-
 @dataclass(frozen=True)
 class EvidenceProvenance:
     """Provenance record for one piece of retrieved evidence.
@@ -109,8 +109,16 @@ class EvidenceProvenance:
             raise ValueError("source_id must be a non-empty string")
         if not self.retrieved_at or not isinstance(self.retrieved_at, str):
             raise ValueError("retrieved_at must be an ISO timestamp")
+        if _ISO_TIMESTAMP.fullmatch(self.retrieved_at) is None:
+            raise ValueError(
+                f"retrieved_at must be an ISO 8601 timestamp, got {self.retrieved_at!r}"
+            )
         if not self.content_hash or not isinstance(self.content_hash, str):
             raise ValueError("content_hash must be a non-empty string")
+        if _SHA256_HEX.fullmatch(self.content_hash) is None:
+            raise ValueError(
+                f"content_hash must be a 64-character SHA-256 hex digest, got {self.content_hash!r}"
+            )
         if not self.query or not isinstance(self.query, str):
             raise ValueError("query must be a non-empty string")
         if not self.relevant_quote or not isinstance(self.relevant_quote, str):
