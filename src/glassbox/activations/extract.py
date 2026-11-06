@@ -146,10 +146,10 @@ def vectors_at_generated_positions(
     """
     if not hidden_states:
         raise ValueError("hidden_states is empty")
-    if prompt_tokens < 1:
-        raise ValueError("prompt_tokens must be positive")
-    if answer_tokens < 2:
-        raise ValueError("at least two generated positions are required")
+    if isinstance(prompt_tokens, bool) or not isinstance(prompt_tokens, int) or prompt_tokens < 1:
+        raise ValueError("prompt_tokens must be a positive integer")
+    if isinstance(answer_tokens, bool) or not isinstance(answer_tokens, int) or answer_tokens < 2:
+        raise ValueError("answer_tokens must be an integer of at least two")
 
     start = prompt_tokens
     end = prompt_tokens + answer_tokens

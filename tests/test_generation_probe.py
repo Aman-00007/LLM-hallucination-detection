@@ -70,6 +70,39 @@ def test_multiple_generated_positions_are_extracted_without_qwen() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("prompt_tokens", "answer_tokens"),
+    [
+        (True, 3),
+        (3.0, 3),
+        ("3", 3),
+        (None, 3),
+        (0, 3),
+        (-1, 3),
+        (3, True),
+        (3, 2.0),
+        (3, "2"),
+        (3, None),
+        (3, 1),
+        (3, 0),
+        (3, -1),
+    ],
+)
+def test_generated_position_extraction_rejects_invalid_token_counts(
+    prompt_tokens: object,
+    answer_tokens: object,
+) -> None:
+    hidden = torch.zeros(1, 6, 2)
+
+    with pytest.raises(ValueError):
+        vectors_at_generated_positions(
+            (hidden,),
+            prompt_tokens=prompt_tokens,
+            answer_tokens=answer_tokens,
+            layers=(0,),
+        )
+
+
 def test_generated_piece_is_not_the_prompt_piece() -> None:
     assert feature_index(10, 4, "last_generated_token") == 13
     assert feature_index(10, 4, "last_prompt_token") == 9
